@@ -50,40 +50,39 @@ np.random.seed(42)
  
  
 # DATOS DE ENTRADA (REEMPLAZAR CON TUS DATOS REALES)
-
+ 
 BOUNDARY_POINTS = [
-  (-35.146836, -57.3536387 ),
-  (-35.0167268, -57.5254052 ),
-  (-35.0003861, -57.5809272 ),
-  (-34.9692072, -57.6278766 ),
-  (-34.933399, -57.6892455 ),
-  (-34.9279807, -57.7210887 ),
-  (-34.9032936, -57.7709109 ),
-  (-34.8309227, -57.8738219 ),
-  (-34.8335299, -57.9338176 ),
-  (-34.8250227, -57.9604034 ),
-  (-34.7813095, -58.014524 ),
-  (-34.7763746, -58.0564952 ),
-  (-34.7516959, -58.11589 ),
-  (-34.7478877, -58.1710791 ),
-  (-34.7362504, -58.1976867 ),
-  (-34.7158706, -58.2151523 ),
-  (-34.6680319, -58.3001247 ),
-  (-34.6472756, -58.3323971 ),
-  (-34.5791088, -58.3784881 ),
-  (-34.5318891, -58.4636322 ),
-  (-34.4478454, -58.5189071 ),
-  (-34.3318726, -58.4454823 ),
-  (-34.2408164, -58.7747288 ),
-  (-34.1854536, -58.9051914 ),
-  (-34.1374432, -58.9865589 ),
-  (-33.805457, -59.3583775 ),
-  (-33.3597667, -60.1739843 ),
-  (-33.0187966, -60.6053528 ),
-  (-32.773039, -60.7233048 ),
-  (-32.5132633, -60.8154697 ),
-  (-32.0445135, -60.9412948 ),
-  (-31.6663364, -60.7380477 )
+  (-35.146836,-57.3536387 ),	
+  (-35.0167268,-57.5254052 ),
+  (-35.0003861,-57.5809272 ),
+  (-34.9692072,-57.6278766 ),
+  (-34.933399,-57.6892455 )	,
+  (-34.9279807,-57.7210887 ),
+  (-34.9032936,-57.7709109 ),
+  (-34.8309227,-57.8738219 ),
+  (-34.8335299,-57.9338176 ),
+  (-34.8250227,-57.9604034 ),
+  (-34.7813095,-58.014524 ),
+  (-34.7763746,-58.0564952 ),
+  (-34.7516959,-58.11589 ),
+  (-34.7478877,-58.1710791 ),
+  (-34.7362504,-58.1976867 ),
+  (-34.7158706,-58.2151523 ),
+  (-34.6680319,-58.3001247 ),
+  (-34.6472756,-58.3323971 ),
+  (-34.5791088,-58.3784881 ),
+  (-34.5318891,-58.4636322 ),
+  (-34.4478454,-58.5189071 ),
+  (-34.3318726,-58.4454823 ),
+  (-34.2408164,-58.7747288 ),
+  (-34.1854536,-58.9051914 ),
+  (-34.1374432,-58.9865589 ),
+  (-33.805457,-59.3583775 ),
+  (-32.9425889,-60.6216154 ),
+  (-32.5105103,-60.775424 ),
+  (-31.7284854,-60.636435 ),
+  (-31.1473454,-59.9325347 ),
+  (-30.0171303,-59.6029448 ),
 ]
  
  
@@ -124,6 +123,18 @@ PUERTOS = [
     ("Puerto Quequén / Necochea", -38.5500, -58.7000),
     ("Puerto San Nicolás", -33.3300, -60.2000),
 ]
+ 
+# Aeropuertos (solo referencia visual en el mapa; ya NO se usan para
+# el cálculo de costo, que ahora es únicamente marítimo)
+ 
+AEROPUERTOS = [
+    ("Aeropuerto Rosario - Islas Malvinas", -32.9036, -60.7853),
+    ("Aeropuerto Ezeiza - Ministro Pistarini", -34.8222, -58.5358),
+    ("Aeroparque Jorge Newbery", -34.5592, -58.4156),
+    ("Aeropuerto Santa Fe", -31.7104, -60.7810),
+    ("Aeropuerto Mar del Plata", -37.9342, -57.5733),
+]
+ 
  
 # FUNCIONES GEOGRÁFICAS
  
@@ -205,8 +216,8 @@ GHS_POP_NODATA = -200.0
 GHS_POP_PROJ4 = "+proj=moll +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs"
  
 MILLA_KM = 1.60934
-RADIO_ZONA_BAJA_KM = 10 * MILLA_KM     # ~3.22 km
-RADIO_ZONA_MEDIA_KM = 25 * MILLA_KM   # ~16.09 km
+RADIO_ZONA_BAJA_KM = 2 * MILLA_KM     # ~3.22 km
+RADIO_ZONA_MEDIA_KM = 10 * MILLA_KM   # ~16.09 km
 RADIO_ZONA_LIBRE_KM = 50 * MILLA_KM   # ~80.47 km (límite conceptual, sin restricción)
  
 UMBRAL_DENSIDAD_BAJA = 40.0    # hab/km² máx. tolerado dentro de las 2 millas
@@ -295,8 +306,11 @@ def densidad_en_punto(point):
     return densidad_en_puntos([point])[0]
  
  
-def densidad_maxima_en_anillo(point, r_min_km, r_max_km, n_radios=3, n_angulos=8):
-    """Estima la densidad máxima (peor caso) dentro de un anillo [r_min, r_max] km."""
+def densidad_maxima_en_anillo(point, r_min_km, r_max_km, n_radios=5, n_angulos=16):
+    """Estima la densidad máxima (peor caso) dentro de un anillo [r_min, r_max] km.
+    n_radios/n_angulos suben respecto de la versión original (3x8=24 puntos)
+    a 5x16=80 puntos por defecto, para no saltear picos de densidad
+    localizados dado que la resolución del raster es de ~1 km/celda."""
     if r_min_km <= 0:
         radios = np.linspace(max(r_max_km * 0.15, 0.1), r_max_km, n_radios)
     else:
@@ -306,28 +320,42 @@ def densidad_maxima_en_anillo(point, r_min_km, r_max_km, n_radios=3, n_angulos=8
         for ang in np.linspace(0, 360, n_angulos, endpoint=False):
             puntos.append(destino(point, ang, r))
     return max(densidad_en_puntos(puntos))
- 
- 
+
+
 def evaluar_restriccion_poblacional(point):
     """
-    Devuelve (fitness_poblacional [0,1], detalle) según las 3 zonas:
-      - 0-2 millas:  densidad muy baja (restricción dura)
-      - 2-10 millas: densidad media tolerada
+    Devuelve (fitness_poblacional [0,1], cumple_restriccion_dura, detalle)
+    según las 3 zonas:
+      - 0-2 millas:  densidad muy baja -> RESTRICCIÓN DURA (ver abajo)
+      - 2-10 millas: densidad media tolerada -> restricción blanda
       - >10 millas:  sin restricción
+
+    La zona 0-2 millas se muestrea con más resolución (n_radios/n_angulos
+    más altos) porque es la que define si el sitio es viable o no.
     """
-    dens_zona_baja = densidad_maxima_en_anillo(point, 0.0, RADIO_ZvONA_BAJA_KM)
-    dens_zona_media = densidad_maxima_en_anillo(point, RADIO_ZONA_BAJA_KM, RADIO_ZONA_MEDIA_KM)
- 
-    if dens_zona_baja <= UMBRAL_DENSIDAD_BAJA:
+    dens_zona_baja = densidad_maxima_en_anillo(
+        point, 0.0, RADIO_ZONA_BAJA_KM, n_radios=6, n_angulos=20
+    )
+    dens_zona_media = densidad_maxima_en_anillo(
+        point, RADIO_ZONA_BAJA_KM, RADIO_ZONA_MEDIA_KM, n_radios=5, n_angulos=16
+    )
+
+    cumple_restriccion_dura = dens_zona_baja <= UMBRAL_DENSIDAD_BAJA
+
+    if cumple_restriccion_dura:
         f_zona_baja = 1.0
     else:
-        f_zona_baja = math.exp(-(dens_zona_baja - UMBRAL_DENSIDAD_BAJA) / UMBRAL_DENSIDAD_BAJA)
- 
+        # Decae MUCHO más rápido que antes (factor 8 en el exponente, vs 1
+        # en la versión original) para que ningún ahorro de costo pueda
+        # compensar el haber superado el umbral de densidad muy baja.
+        exceso_relativo = (dens_zona_baja - UMBRAL_DENSIDAD_BAJA) / UMBRAL_DENSIDAD_BAJA
+        f_zona_baja = math.exp(-8.0 * exceso_relativo)
+
     if dens_zona_media <= UMBRAL_DENSIDAD_MEDIA:
         f_zona_media = 1.0
     else:
         f_zona_media = math.exp(-(dens_zona_media - UMBRAL_DENSIDAD_MEDIA) / UMBRAL_DENSIDAD_MEDIA)
- 
+
     # La zona de 0-2 millas pesa más porque es la restricción dura de seguridad.
     fitness = 0.65 * f_zona_baja + 0.35 * f_zona_media
     detalle = dict(
@@ -335,8 +363,9 @@ def evaluar_restriccion_poblacional(point):
         dens_zona_media=dens_zona_media,
         f_zona_baja=f_zona_baja,
         f_zona_media=f_zona_media,
+        cumple_restriccion_dura=cumple_restriccion_dura,
     )
-    return fitness, detalle
+    return fitness, cumple_restriccion_dura, detalle
  
  
  
@@ -384,6 +413,11 @@ SIGMA_MUTACION_INICIAL = 0.12
 TAM_TORNEO = 2
  
 PESOS_FITNESS = dict(costo=0.5, poblacional=0.5)
+
+# Penalización multiplicativa aplicada al fitness total cuando el sitio
+# viola la restricción DURA de densidad (0-2 millas). Al ser multiplicativa
+# y muy chica, ningún ahorro de costo alcanza para compensarla.
+PENALIZACION_RESTRICCION_DURA = 0.02
  
  
 def crear_individuo():
@@ -391,19 +425,29 @@ def crear_individuo():
  
  
 def evaluar_poblacion(poblacion):
-    """Devuelve fitness normalizado [0,1] para toda la población."""
+    """Devuelve fitness normalizado [0,1] para toda la población.
+
+    La restricción de densidad 0-2 millas es DURA: si un individuo la
+    viola, su fitness total se multiplica por PENALIZACION_RESTRICCION_DURA
+    (muy chico), de modo que ningún ahorro de costo pueda compensar haber
+    superado el umbral. No se pone en 0 exacto para conservar algo de
+    gradiente y que el AG pueda seguir "empujando" al individuo fuera de
+    la zona prohibida en vez de quedar con fitness plano.
+    """
     puntos = [interpolate_point(ind["t"], BOUNDARY_POINTS) for ind in poblacion]
- 
+
     costos_brutos = [costo_construccion_bruto(p) for p in puntos]
     costos_norm = normalizar(costos_brutos)  # 0 = más barato
- 
+
     fitness_total = []
     detalle = []
     for p, c_norm in zip(puntos, costos_norm):
         f_costo = 1 - c_norm
-        f_poblacional, det_pob = evaluar_restriccion_poblacional(p)
+        f_poblacional, cumple_restriccion_dura, det_pob = evaluar_restriccion_poblacional(p)
         f = (PESOS_FITNESS["costo"] * f_costo
              + PESOS_FITNESS["poblacional"] * f_poblacional)
+        if not cumple_restriccion_dura:
+            f *= PENALIZACION_RESTRICCION_DURA
         fitness_total.append(f)
         detalle.append(dict(
             punto=p,
@@ -413,7 +457,6 @@ def evaluar_poblacion(poblacion):
             **det_pob,
         ))
     return fitness_total, detalle
- 
  
 def seleccion_torneo(poblacion, fitness, k=TAM_TORNEO):
     participantes = random.sample(list(zip(poblacion, fitness)), k)
@@ -630,7 +673,12 @@ def generar_mapa(mejor, poblacion_final, fitness_total, path="mapa_optimo.html")
         ).add_to(m)
  
     # Aeropuertos
-
+    for nombre, lat, lon in AEROPUERTOS:
+        folium.Marker(
+            location=(lat, lon),
+            icon=folium.Icon(color="cadetblue", icon="plane", prefix="fa"),
+            popup=f"Aeropuerto: {nombre}",
+        ).add_to(m)
  
     # Últimas ubicaciones evaluadas por la población (para visualizar dispersión)
     for ind in poblacion_final:
@@ -654,6 +702,11 @@ def generar_mapa(mejor, poblacion_final, fitness_total, path="mapa_optimo.html")
  
     # Punto óptimo
     detalle = mejor["detalle"]
+    cumple = detalle.get("cumple_restriccion_dura", True)
+    estado_restriccion = (
+        "✅ CUMPLE restricción dura (0-2 mi)" if cumple
+        else "⚠️ VIOLA restricción dura (0-2 mi)"
+    )
     popup_html = (
         f"<b>Ubicación óptima SMR</b><br>"
         f"Lat: {punto_optimo[0]:.4f}, Lon: {punto_optimo[1]:.4f}<br>"
@@ -663,12 +716,13 @@ def generar_mapa(mejor, poblacion_final, fitness_total, path="mapa_optimo.html")
         f"Fitness poblacional: {detalle['f_poblacional']:.3f}<br>"
         f"&nbsp;&nbsp;Densidad máx. 0-2 mi: {detalle['dens_zona_baja']:.1f} hab/km²<br>"
         f"&nbsp;&nbsp;Densidad máx. 2-10 mi: {detalle['dens_zona_media']:.1f} hab/km²<br>"
+        f"&nbsp;&nbsp;{estado_restriccion}<br>"
         f"<hr>"
         f"<b>Fitness total: {fitness_total:.3f}</b>"
     ).replace(",", ".")
     folium.Marker(
         location=punto_optimo,
-        icon=folium.Icon(color="red", icon="star", prefix="fa"),
+        icon=folium.Icon(color="red" if cumple else "black", icon="star", prefix="fa"),
         popup=folium.Popup(popup_html, max_width=320),
         tooltip="Ubicación óptima",
     ).add_to(m)

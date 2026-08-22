@@ -50,40 +50,39 @@ np.random.seed(42)
  
  
 # DATOS DE ENTRADA (REEMPLAZAR CON TUS DATOS REALES)
-
+ 
 BOUNDARY_POINTS = [
-  (-35.146836, -57.3536387 ),
-  (-35.0167268, -57.5254052 ),
-  (-35.0003861, -57.5809272 ),
-  (-34.9692072, -57.6278766 ),
-  (-34.933399, -57.6892455 ),
-  (-34.9279807, -57.7210887 ),
-  (-34.9032936, -57.7709109 ),
-  (-34.8309227, -57.8738219 ),
-  (-34.8335299, -57.9338176 ),
-  (-34.8250227, -57.9604034 ),
-  (-34.7813095, -58.014524 ),
-  (-34.7763746, -58.0564952 ),
-  (-34.7516959, -58.11589 ),
-  (-34.7478877, -58.1710791 ),
-  (-34.7362504, -58.1976867 ),
-  (-34.7158706, -58.2151523 ),
-  (-34.6680319, -58.3001247 ),
-  (-34.6472756, -58.3323971 ),
-  (-34.5791088, -58.3784881 ),
-  (-34.5318891, -58.4636322 ),
-  (-34.4478454, -58.5189071 ),
-  (-34.3318726, -58.4454823 ),
-  (-34.2408164, -58.7747288 ),
-  (-34.1854536, -58.9051914 ),
-  (-34.1374432, -58.9865589 ),
-  (-33.805457, -59.3583775 ),
-  (-33.3597667, -60.1739843 ),
-  (-33.0187966, -60.6053528 ),
-  (-32.773039, -60.7233048 ),
-  (-32.5132633, -60.8154697 ),
-  (-32.0445135, -60.9412948 ),
-  (-31.6663364, -60.7380477 )
+  (-35.146836,-57.3536387 ),	
+  (-35.0167268,-57.5254052 ),
+  (-35.0003861,-57.5809272 ),
+  (-34.9692072,-57.6278766 ),
+  (-34.933399,-57.6892455 )	,
+  (-34.9279807,-57.7210887 ),
+  (-34.9032936,-57.7709109 ),
+  (-34.8309227,-57.8738219 ),
+  (-34.8335299,-57.9338176 ),
+  (-34.8250227,-57.9604034 ),
+  (-34.7813095,-58.014524 ),
+  (-34.7763746,-58.0564952 ),
+  (-34.7516959,-58.11589 ),
+  (-34.7478877,-58.1710791 ),
+  (-34.7362504,-58.1976867 ),
+  (-34.7158706,-58.2151523 ),
+  (-34.6680319,-58.3001247 ),
+  (-34.6472756,-58.3323971 ),
+  (-34.5791088,-58.3784881 ),
+  (-34.5318891,-58.4636322 ),
+  (-34.4478454,-58.5189071 ),
+  (-34.3318726,-58.4454823 ),
+  (-34.2408164,-58.7747288 ),
+  (-34.1854536,-58.9051914 ),
+  (-34.1374432,-58.9865589 ),
+  (-33.805457,-59.3583775 ),
+  (-32.9425889,-60.6216154 ),
+  (-32.5105103,-60.775424 ),
+  (-31.7284854,-60.636435 ),
+  (-31.1473454,-59.9325347 ),
+  (-30.0171303,-59.6029448 ),
 ]
  
  
@@ -124,6 +123,18 @@ PUERTOS = [
     ("Puerto Quequén / Necochea", -38.5500, -58.7000),
     ("Puerto San Nicolás", -33.3300, -60.2000),
 ]
+ 
+# Aeropuertos (solo referencia visual en el mapa; ya NO se usan para
+# el cálculo de costo, que ahora es únicamente marítimo)
+ 
+AEROPUERTOS = [
+    ("Aeropuerto Rosario - Islas Malvinas", -32.9036, -60.7853),
+    ("Aeropuerto Ezeiza - Ministro Pistarini", -34.8222, -58.5358),
+    ("Aeroparque Jorge Newbery", -34.5592, -58.4156),
+    ("Aeropuerto Santa Fe", -31.7104, -60.7810),
+    ("Aeropuerto Mar del Plata", -37.9342, -57.5733),
+]
+ 
  
 # FUNCIONES GEOGRÁFICAS
  
@@ -186,10 +197,14 @@ def interpolate_point(t, boundary_points):
 # NoData = -200 (celdas sin datos / fuera de tierra firme).
  
 import glob
+import io
+import base64
 import rasterio
 from rasterio.io import MemoryFile
 from rasterio.merge import merge as rio_merge
+from rasterio.warp import calculate_default_transform, reproject, Resampling, transform_bounds
 from pyproj import Transformer
+import matplotlib.colors as mcolors
  
 GHS_POP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ghs_pop_tiles")
 GHS_POP_NODATA = -200.0
@@ -205,8 +220,8 @@ GHS_POP_NODATA = -200.0
 GHS_POP_PROJ4 = "+proj=moll +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs +type=crs"
  
 MILLA_KM = 1.60934
-RADIO_ZONA_BAJA_KM = 10 * MILLA_KM     # ~3.22 km
-RADIO_ZONA_MEDIA_KM = 25 * MILLA_KM   # ~16.09 km
+RADIO_ZONA_BAJA_KM = 2 * MILLA_KM     # ~3.22 km
+RADIO_ZONA_MEDIA_KM = 10 * MILLA_KM   # ~16.09 km
 RADIO_ZONA_LIBRE_KM = 50 * MILLA_KM   # ~80.47 km (límite conceptual, sin restricción)
  
 UMBRAL_DENSIDAD_BAJA = 40.0    # hab/km² máx. tolerado dentro de las 2 millas
@@ -295,8 +310,11 @@ def densidad_en_punto(point):
     return densidad_en_puntos([point])[0]
  
  
-def densidad_maxima_en_anillo(point, r_min_km, r_max_km, n_radios=3, n_angulos=8):
-    """Estima la densidad máxima (peor caso) dentro de un anillo [r_min, r_max] km."""
+def densidad_maxima_en_anillo(point, r_min_km, r_max_km, n_radios=5, n_angulos=16):
+    """Estima la densidad máxima (peor caso) dentro de un anillo [r_min, r_max] km.
+    n_radios/n_angulos suben respecto de la versión original (3x8=24 puntos)
+    a 5x16=80 puntos por defecto, para no saltear picos de densidad
+    localizados dado que la resolución del raster es de ~1 km/celda."""
     if r_min_km <= 0:
         radios = np.linspace(max(r_max_km * 0.15, 0.1), r_max_km, n_radios)
     else:
@@ -306,28 +324,42 @@ def densidad_maxima_en_anillo(point, r_min_km, r_max_km, n_radios=3, n_angulos=8
         for ang in np.linspace(0, 360, n_angulos, endpoint=False):
             puntos.append(destino(point, ang, r))
     return max(densidad_en_puntos(puntos))
- 
- 
+
+
 def evaluar_restriccion_poblacional(point):
     """
-    Devuelve (fitness_poblacional [0,1], detalle) según las 3 zonas:
-      - 0-2 millas:  densidad muy baja (restricción dura)
-      - 2-10 millas: densidad media tolerada
+    Devuelve (fitness_poblacional [0,1], cumple_restriccion_dura, detalle)
+    según las 3 zonas:
+      - 0-2 millas:  densidad muy baja -> RESTRICCIÓN DURA (ver abajo)
+      - 2-10 millas: densidad media tolerada -> restricción blanda
       - >10 millas:  sin restricción
+
+    La zona 0-2 millas se muestrea con más resolución (n_radios/n_angulos
+    más altos) porque es la que define si el sitio es viable o no.
     """
-    dens_zona_baja = densidad_maxima_en_anillo(point, 0.0, RADIO_ZvONA_BAJA_KM)
-    dens_zona_media = densidad_maxima_en_anillo(point, RADIO_ZONA_BAJA_KM, RADIO_ZONA_MEDIA_KM)
- 
-    if dens_zona_baja <= UMBRAL_DENSIDAD_BAJA:
+    dens_zona_baja = densidad_maxima_en_anillo(
+        point, 0.0, RADIO_ZONA_BAJA_KM, n_radios=6, n_angulos=20
+    )
+    dens_zona_media = densidad_maxima_en_anillo(
+        point, RADIO_ZONA_BAJA_KM, RADIO_ZONA_MEDIA_KM, n_radios=5, n_angulos=16
+    )
+
+    cumple_restriccion_dura = dens_zona_baja <= UMBRAL_DENSIDAD_BAJA
+
+    if cumple_restriccion_dura:
         f_zona_baja = 1.0
     else:
-        f_zona_baja = math.exp(-(dens_zona_baja - UMBRAL_DENSIDAD_BAJA) / UMBRAL_DENSIDAD_BAJA)
- 
+        # Decae MUCHO más rápido que antes (factor 8 en el exponente, vs 1
+        # en la versión original) para que ningún ahorro de costo pueda
+        # compensar el haber superado el umbral de densidad muy baja.
+        exceso_relativo = (dens_zona_baja - UMBRAL_DENSIDAD_BAJA) / UMBRAL_DENSIDAD_BAJA
+        f_zona_baja = math.exp(-8.0 * exceso_relativo)
+
     if dens_zona_media <= UMBRAL_DENSIDAD_MEDIA:
         f_zona_media = 1.0
     else:
         f_zona_media = math.exp(-(dens_zona_media - UMBRAL_DENSIDAD_MEDIA) / UMBRAL_DENSIDAD_MEDIA)
- 
+
     # La zona de 0-2 millas pesa más porque es la restricción dura de seguridad.
     fitness = 0.65 * f_zona_baja + 0.35 * f_zona_media
     detalle = dict(
@@ -335,8 +367,9 @@ def evaluar_restriccion_poblacional(point):
         dens_zona_media=dens_zona_media,
         f_zona_baja=f_zona_baja,
         f_zona_media=f_zona_media,
+        cumple_restriccion_dura=cumple_restriccion_dura,
     )
-    return fitness, detalle
+    return fitness, cumple_restriccion_dura, detalle
  
  
  
@@ -384,6 +417,11 @@ SIGMA_MUTACION_INICIAL = 0.12
 TAM_TORNEO = 2
  
 PESOS_FITNESS = dict(costo=0.5, poblacional=0.5)
+
+# Penalización multiplicativa aplicada al fitness total cuando el sitio
+# viola la restricción DURA de densidad (0-2 millas). Al ser multiplicativa
+# y muy chica, ningún ahorro de costo alcanza para compensarla.
+PENALIZACION_RESTRICCION_DURA = 0.02
  
  
 def crear_individuo():
@@ -391,19 +429,29 @@ def crear_individuo():
  
  
 def evaluar_poblacion(poblacion):
-    """Devuelve fitness normalizado [0,1] para toda la población."""
+    """Devuelve fitness normalizado [0,1] para toda la población.
+
+    La restricción de densidad 0-2 millas es DURA: si un individuo la
+    viola, su fitness total se multiplica por PENALIZACION_RESTRICCION_DURA
+    (muy chico), de modo que ningún ahorro de costo pueda compensar haber
+    superado el umbral. No se pone en 0 exacto para conservar algo de
+    gradiente y que el AG pueda seguir "empujando" al individuo fuera de
+    la zona prohibida en vez de quedar con fitness plano.
+    """
     puntos = [interpolate_point(ind["t"], BOUNDARY_POINTS) for ind in poblacion]
- 
+
     costos_brutos = [costo_construccion_bruto(p) for p in puntos]
     costos_norm = normalizar(costos_brutos)  # 0 = más barato
- 
+
     fitness_total = []
     detalle = []
     for p, c_norm in zip(puntos, costos_norm):
         f_costo = 1 - c_norm
-        f_poblacional, det_pob = evaluar_restriccion_poblacional(p)
+        f_poblacional, cumple_restriccion_dura, det_pob = evaluar_restriccion_poblacional(p)
         f = (PESOS_FITNESS["costo"] * f_costo
              + PESOS_FITNESS["poblacional"] * f_poblacional)
+        if not cumple_restriccion_dura:
+            f *= PENALIZACION_RESTRICCION_DURA
         fitness_total.append(f)
         detalle.append(dict(
             punto=p,
@@ -413,7 +461,6 @@ def evaluar_poblacion(poblacion):
             **det_pob,
         ))
     return fitness_total, detalle
- 
  
 def seleccion_torneo(poblacion, fitness, k=TAM_TORNEO):
     participantes = random.sample(list(zip(poblacion, fitness)), k)
@@ -567,37 +614,149 @@ def _leyenda_densidad_html():
     """
  
  
+# OVERLAY DE DENSIDAD — MISMO RASTER QUE USA EL FITNESS (GHS-POP)
+#
+# En vez de mostrar en el mapa un dataset de población DISTINTO al que
+# usa el algoritmo genético para decidir (GIBS/GPWv4 2020, ~otra fuente,
+# otro año y otra resolución que GHS-POP E2030), esta función reproyecta
+# el MISMO mosaico GHS-POP (Mollweide -> WGS84) que ya se usa en
+# `densidad_en_puntos` y lo dibuja como overlay. Así lo que se ve en el
+# mapa es exactamente lo que decidió el GA, célula por célula.
+#
+# La reproyección se hace con rasterio.warp.reproject (no a mano), que
+# usa PROJ internamente de forma correcta siempre que el CRS de origen
+# esté bien definido -y acá ya lo está, porque se fuerza GHS_POP_PROJ4
+# en vez de confiar en el CRS embebido en los .tif (ver más arriba).
+
+# Bins alineados a los umbrales reales del modelo, para que la leyenda
+# coincida con las restricciones (0-2 mi y 2-10 mi) en vez de usar la
+# clasificación genérica de GPWv4 que se ve en GIBS.
+DENSIDAD_BINS = [0, 1, 5, 25, UMBRAL_DENSIDAD_BAJA, 100, UMBRAL_DENSIDAD_MEDIA, 1000, 100000]
+DENSIDAD_COLORES = [
+    "#ffffe0", "#ffe0a3", "#ffb347", "#ff8c42",
+    "#f4622e", "#d8371c", "#b0170c", "#6b0000",
+]
+
+
+def _bounds_de_interes(padding_km=25.0):
+    """Bounding box (WGS84) que cubre el corredor + todos los markers,
+    con margen, para no reproyectar el raster global entero."""
+    lats = [p[0] for p in BOUNDARY_POINTS] + [c[1] for c in CIUDADES] \
+        + [e[1] for e in ESTACIONES_TRANSFORMADORAS] + [p_[1] for p_ in PUERTOS]
+    lons = [p[1] for p in BOUNDARY_POINTS] + [c[2] for c in CIUDADES] \
+        + [e[2] for e in ESTACIONES_TRANSFORMADORAS] + [p_[2] for p_ in PUERTOS]
+    lat_min, lat_max = min(lats), max(lats)
+    lon_min, lon_max = min(lons), max(lons)
+    # padding aproximado en grados (a estas latitudes, 1 grado ~ 100-110 km)
+    pad_deg = padding_km / 100.0
+    return (lon_min - pad_deg, lat_min - pad_deg, lon_max + pad_deg, lat_max + pad_deg)
+
+
+def _generar_overlay_densidad_ghs_pop(resolucion_deg=0.01):
+    """Reproyecta (con rasterio.warp, automático) el mismo raster GHS-POP
+    usado en el fitness a WGS84, recortado a la zona de interés, y lo
+    devuelve como (data_uri_png, bounds_folium) listo para ImageOverlay.
+    """
+    dataset, _ = _obtener_raster_ghs_pop()
+    src_crs = dataset.crs
+
+    dst_crs = "EPSG:4326"
+    west, south, east, north = _bounds_de_interes()
+
+    width = max(int((east - west) / resolucion_deg), 1)
+    height = max(int((north - south) / resolucion_deg), 1)
+    dst_transform = rasterio.transform.from_bounds(west, south, east, north, width, height)
+
+    src_data = dataset.read(1)
+    dst_data = np.full((height, width), GHS_POP_NODATA, dtype=np.float32)
+
+    reproject(
+        source=src_data,
+        destination=dst_data,
+        src_transform=dataset.transform,
+        src_crs=src_crs,
+        dst_transform=dst_transform,
+        dst_crs=dst_crs,
+        src_nodata=GHS_POP_NODATA,
+        dst_nodata=GHS_POP_NODATA,
+        resampling=Resampling.bilinear,
+    )
+
+    dst_data = np.where(dst_data <= GHS_POP_NODATA, 0.0, dst_data)
+
+    cmap = mcolors.ListedColormap(DENSIDAD_COLORES)
+    norm = mcolors.BoundaryNorm(DENSIDAD_BINS, cmap.N)
+    rgba = (cmap(norm(dst_data)) * 255).astype(np.uint8)
+    # transparencia donde la densidad es ~0, para no tapar el mapa base
+    rgba[..., 3] = np.where(dst_data <= 0.5, 0, 190).astype(np.uint8)
+
+    from PIL import Image
+    img = Image.fromarray(rgba, mode="RGBA")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    data_uri = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+    # folium.ImageOverlay espera bounds como [[south, west], [north, east]]
+    bounds_folium = [[south, west], [north, east]]
+    return data_uri, bounds_folium
+
+
+def _leyenda_densidad_ghs_pop_html():
+    filas = "".join(
+        f'<div style="display:flex;align-items:center;margin:1px 0;">'
+        f'<span style="width:14px;height:14px;background:{color};display:inline-block;'
+        f'margin-right:6px;border:1px solid #999;"></span>'
+        f'<span style="font-size:11px;">{lo:g} - {hi:g} hab/km²</span></div>'
+        for lo, hi, color in zip(DENSIDAD_BINS[:-1], DENSIDAD_BINS[1:], DENSIDAD_COLORES)
+    )
+    return f"""
+    <div style="position: fixed; bottom: 30px; left: 30px; z-index: 9999;
+                background: white; padding: 8px 10px; border: 1px solid #888;
+                border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.3);">
+      <div style="font-weight:bold; font-size:12px; margin-bottom:4px;">
+        Densidad poblacional (GHS-POP, misma fuente que el fitness)
+      </div>
+      {filas}
+    </div>
+    """
+
+
 def generar_mapa(mejor, poblacion_final, fitness_total, path="mapa_optimo.html"):
     punto_optimo = mejor["detalle"]["punto"]
  
-    # Sin tiles por defecto: el mapa base ES la capa de densidad poblacional
-    # (NASA GIBS / GPWv4), no una capa aparte superpuesta a un mapa de calles.
-    m = folium.Map(location=punto_optimo, zoom_start=6, tiles=None)
- 
+    # Mapa base de calles, y ENCIMA la densidad poblacional real (GHS-POP,
+    # el mismo raster que usa el fitness del GA) como overlay georreferenciado.
+    m = folium.Map(location=punto_optimo, zoom_start=6, tiles="OpenStreetMap")
+
+    data_uri, bounds_overlay = _generar_overlay_densidad_ghs_pop()
+    folium.raster_layers.ImageOverlay(
+        image=data_uri,
+        bounds=bounds_overlay,
+        name="Densidad poblacional (GHS-POP - misma fuente que el fitness)",
+        opacity=0.85,
+        interactive=False,
+        cross_origin=False,
+        zindex=1,
+    ).add_to(m)
+
+    # Capa de referencia (OPCIONAL, apagada por defecto): GPWv4 2020 via
+    # NASA GIBS. Es OTRO dataset de poblacion (otro anio, otra fuente, otra
+    # resolucion) que el que usa el fitness -por eso puede no coincidir
+    # visualmente con la zona que el GA considero de alta/baja densidad.
+    # Se deja solo como referencia externa, no como fuente de verdad.
     folium.TileLayer(
         tiles=GIBS_GPW_TILES_URL,
         attr=GIBS_GPW_ATTR,
-        name="Densidad poblacional (NASA GIBS - GPW 2020)",
-        overlay=False,
-        control=True,
-        show=True,
-        min_zoom=1,
-        max_zoom=18,
-        max_native_zoom=7,  # las tiles de GIBS solo existen hasta z=7; más zoom = mismo pixel escalado
-    ).add_to(m)
- 
-    # Mapa base alternativo (calles/topónimos) por si se quiere ubicar
-    # referencias de calles; se conmuta desde el control de capas, no se
-    # superpone a la densidad.
-    folium.TileLayer(
-        tiles="OpenStreetMap",
-        name="Mapa base (OpenStreetMap, sin densidad)",
-        overlay=False,
+        name="Referencia externa: NASA GIBS GPWv4 2020 (otro dataset, no el usado en el fitness)",
+        overlay=True,
         control=True,
         show=False,
+        min_zoom=1,
+        max_zoom=18,
+        max_native_zoom=7,
     ).add_to(m)
- 
-    m.get_root().html.add_child(folium.Element(_leyenda_densidad_html()))
+
+    m.get_root().html.add_child(folium.Element(_leyenda_densidad_ghs_pop_html()))
  
     # Línea frontera (corredor de ubicaciones disponibles)
     folium.PolyLine(
@@ -630,7 +789,12 @@ def generar_mapa(mejor, poblacion_final, fitness_total, path="mapa_optimo.html")
         ).add_to(m)
  
     # Aeropuertos
-
+    for nombre, lat, lon in AEROPUERTOS:
+        folium.Marker(
+            location=(lat, lon),
+            icon=folium.Icon(color="cadetblue", icon="plane", prefix="fa"),
+            popup=f"Aeropuerto: {nombre}",
+        ).add_to(m)
  
     # Últimas ubicaciones evaluadas por la población (para visualizar dispersión)
     for ind in poblacion_final:
@@ -654,6 +818,11 @@ def generar_mapa(mejor, poblacion_final, fitness_total, path="mapa_optimo.html")
  
     # Punto óptimo
     detalle = mejor["detalle"]
+    cumple = detalle.get("cumple_restriccion_dura", True)
+    estado_restriccion = (
+        "✅ CUMPLE restricción dura (0-2 mi)" if cumple
+        else "⚠️ VIOLA restricción dura (0-2 mi)"
+    )
     popup_html = (
         f"<b>Ubicación óptima SMR</b><br>"
         f"Lat: {punto_optimo[0]:.4f}, Lon: {punto_optimo[1]:.4f}<br>"
@@ -663,12 +832,13 @@ def generar_mapa(mejor, poblacion_final, fitness_total, path="mapa_optimo.html")
         f"Fitness poblacional: {detalle['f_poblacional']:.3f}<br>"
         f"&nbsp;&nbsp;Densidad máx. 0-2 mi: {detalle['dens_zona_baja']:.1f} hab/km²<br>"
         f"&nbsp;&nbsp;Densidad máx. 2-10 mi: {detalle['dens_zona_media']:.1f} hab/km²<br>"
+        f"&nbsp;&nbsp;{estado_restriccion}<br>"
         f"<hr>"
         f"<b>Fitness total: {fitness_total:.3f}</b>"
     ).replace(",", ".")
     folium.Marker(
         location=punto_optimo,
-        icon=folium.Icon(color="red", icon="star", prefix="fa"),
+        icon=folium.Icon(color="red" if cumple else "black", icon="star", prefix="fa"),
         popup=folium.Popup(popup_html, max_width=320),
         tooltip="Ubicación óptima",
     ).add_to(m)
